@@ -99,8 +99,10 @@ func TestInlineImageOptions(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			var buffer bytes.Buffer
 
-			if err := iterm2.InlineImageTo(&buffer, imageData, option); err != nil {
+			if n, err := iterm2.InlineImageTo(&buffer, imageData, option); err != nil {
 				t.Fatalf("inline image: %v", err)
+			} else if n != buffer.Len() {
+				t.Fatalf("invalid number of bytes: expected %v, got %v", buffer.Len(), n)
 			}
 
 			if diff := cmp.Diff(buffer.String(), buildInlineImage(imageData, serializedOption)); diff != "" {

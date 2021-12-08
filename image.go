@@ -109,7 +109,7 @@ type inlineImageOptions struct {
 
 // InlineImage is equivalent to calling InlineImageTo with os.Stdout as the
 // output io.Writer.
-func InlineImage(data []byte, opts ...InlineImageOption) error {
+func InlineImage(data []byte, opts ...InlineImageOption) (int, error) {
 	return InlineImageTo(os.Stdout, data, opts...)
 }
 
@@ -118,50 +118,77 @@ func InlineImage(data []byte, opts ...InlineImageOption) error {
 // the provided image. InlineImageTo accepts zero or more optional configuration
 // options. If not provided, the configuration options will use the default
 // values documented by the iterm2's Inline Images Protocol.
-func InlineImageTo(w io.Writer, data []byte, opts ...InlineImageOption) error {
-	if _, err := fmt.Fprintf(w, "\033]1337;File=size=%d", len(data)); err != nil {
-		return err
+//
+// InlineImageTo keeps track of number of written bytes as reported by the
+// provided io.Writer, and returns it to the caller. If the provided io.Writer
+// returns an error, InlineImageTo returns immediately with that error and with
+// the number of bytes written up to that point.
+func InlineImageTo(w io.Writer, data []byte, opts ...InlineImageOption) (int, error) {
+	var written int
+
+	if err := inlineImageTo(newPrinter(w, &written), data, opts...); err != nil {
+		return written, err
 	}
 
+	return written, nil
+}
+
+func inlineImageTo(print printer, data []byte, opts ...InlineImageOption) error {
 	var options inlineImageOptions
 
 	for _, opt := range opts {
 		opt(&options)
 	}
 
+	if err := print("\033]1337;File=size=%d", len(data)); err != nil {
+		return err
+	}
+
 	if options.name != "" {
-		if _, err := fmt.Fprintf(w, ";name=%s", base64.StdEncoding.EncodeToString([]byte(options.name))); err != nil {
+		if err := print(";name=%s", base64.StdEncoding.EncodeToString([]byte(options.name))); err != nil {
 			return err
 		}
 	}
 
 	if options.height != "" {
-		if _, err := fmt.Fprintf(w, ";height=%s", options.height); err != nil {
+		if err := print(";height=%s", options.height); err != nil {
 			return err
 		}
 	}
 
 	if options.width != "" {
-		if _, err := fmt.Fprintf(w, ";width=%s", options.width); err != nil {
+		if err := print(";width=%s", options.width); err != nil {
 			return err
 		}
 	}
 
 	if options.preserveAspectRatio != "" {
-		if _, err := fmt.Fprintf(w, ";preserveAspectRatio=%s", options.preserveAspectRatio); err != nil {
+		if err := print(";preserveAspectRatio=%s", options.preserveAspectRatio); err != nil {
 			return err
 		}
 	}
 
 	if options.inline != "" {
-		if _, err := fmt.Fprintf(w, ";inline=%s", options.inline); err != nil {
+		if err := print(";inline=%s", options.inline); err != nil {
 			return err
 		}
 	}
 
-	if _, err := fmt.Fprintf(w, ":%s\a", base64.StdEncoding.EncodeToString(data)); err != nil {
+	if err := print(":%s\a", base64.StdEncoding.EncodeToString(data)); err != nil {
 		return err
 	}
 
 	return nil
+}
+
+type printer func(format string, args ...interface{}) error
+
+func newPrinter(w io.Writer, written *int) printer {
+	return func(format string, args ...interface{}) error {
+		n, err := fmt.Fprintf(w, format, args...)
+
+		*written += n
+
+		return err
+	}
 }
