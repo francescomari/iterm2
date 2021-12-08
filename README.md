@@ -12,7 +12,7 @@ go get github.com/francescomari/iterm2
 
 ## Usage
 
-Consult the [official documentation][2] to learn how to use this library.
+Read the [documentation][2] to learn how to use this library.
 
 ## License
 
